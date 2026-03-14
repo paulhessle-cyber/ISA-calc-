@@ -1,0 +1,215 @@
+import { useState, useMemo } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+const formatGBP = (val) =>
+  val >= 1_000_000 ? `£${(val / 1_000_000).toFixed(2)}m`
+  : val >= 1_000 ? `£${(val / 1_000).toFixed(1)}k`
+  : `£${val.toFixed(0)}`;
+
+const RATES = [
+  { label: "Conservative", key: "conservative", rate: 0.04, color: "#8B6914" },
+  { label: "Moderate", key: "moderate", rate: 0.07, color: "#2D5A3D" },
+  { label: "Optimistic", key: "optimistic", rate: 0.10, color: "#8B2635" },
+];
+
+function computeData(dailyAmount, years) {
+  const yearly = dailyAmount * 365;
+  return Array.from({ length: years }, (_, i) => {
+    const y = i + 1;
+    const row = { year: y, contributed: Math.round(yearly * y) };
+    RATES.forEach(({ key, rate }) => {
+      let bal = 0;
+      for (let j = 0; j < y; j++) bal = (bal + yearly) * (1 + rate);
+      row[key] = Math.round(bal);
+    });
+    return row;
+  });
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: "#FAF6EE", border: "1px solid #C9A84C", borderRadius: 4, padding: "10px 14px", fontFamily: "'Crimson Text', serif", fontSize: 14, boxShadow: "2px 2px 8px rgba(0,0,0,0.15)" }}>
+      <p style={{ color: "#5C4A1E", fontWeight: 700, marginBottom: 6, borderBottom: "1px solid #E8D9B0", paddingBottom: 4 }}>Year {label}</p>
+      {payload.map(p => <p key={p.dataKey} style={{ color: p.color, margin: "2px 0" }}>{p.name}: <strong>{formatGBP(p.value)}</strong></p>)}
+    </div>
+  );
+};
+
+export default function ISACalculator() {
+  const [daily, setDaily] = useState(10);
+  const [years, setYears] = useState(20);
+  const [activeTab, setActiveTab] = useState("chart");
+  const data = useMemo(() => computeData(daily, years), [daily, years]);
+  const final = data[data.length - 1];
+  const totalContributed = daily * 365 * years;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F5EDD8", fontFamily: "'Crimson Text', serif", padding: "40px 16px", position: "relative", overflow: "hidden" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=IM+Fell+English:ital@0;1&family=Courier+Prime:wght@400;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        .ledger-input { -webkit-appearance: none; width: 100%; height: 3px; border-radius: 0; outline: none; cursor: pointer; }
+        .ledger-input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid #F5EDD8; transition: transform 0.15s; }
+        .ledger-input::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        .tab-pill { background: none; border: 1px solid #C9A84C; cursor: pointer; padding: 5px 18px; font-family: 'Crimson Text', serif; font-size: 15px; transition: all 0.2s; color: #8B6914; letter-spacing: 0.05em; }
+        .tab-pill:first-child { border-right: none; }
+        .tab-pill.active { background: #C9A84C; color: #FAF6EE; }
+        .tab-pill:not(.active):hover { background: #F0E4C0; }
+        
+        .ornament { color: #C9A84C; font-size: 18px; }
+        
+        .stat-box { background: #FAF6EE; border: 1px solid #D4B87A; padding: 16px 18px; position: relative; }
+        .stat-box::before { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; border: 1px solid #E8D9B0; pointer-events: none; }
+        
+        table { border-collapse: collapse; width: 100%; }
+        th { font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #8B6914; padding: 8px 12px; border-bottom: 2px solid #C9A84C; text-align: right; }
+        th:first-child { text-align: center; }
+        td { padding: 9px 12px; border-bottom: 1px solid #E8D9B0; font-size: 15px; color: #3D2B0A; text-align: right; font-family: 'Courier Prime', monospace; }
+        td:first-child { text-align: center; color: #8B6914; }
+        tr:hover td { background: #F5EDDA; }
+        
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 120px; color: rgba(201,168,76,0.06); font-family: 'IM Fell English', serif; white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: 0.1em; }
+      `}</style>
+
+      {/* Watermark */}
+      <div className="watermark">STOCKS & SHARES ISA</div>
+
+      {/* Decorative corner borders */}
+      {["top:0;left:0;border-top:3px solid #C9A84C;border-left:3px solid #C9A84C",
+        "top:0;right:0;border-top:3px solid #C9A84C;border-right:3px solid #C9A84C",
+        "bottom:0;left:0;border-bottom:3px solid #C9A84C;border-left:3px solid #C9A84C",
+        "bottom:0;right:0;border-bottom:3px solid #C9A84C;border-right:3px solid #C9A84C"
+      ].map((s, i) => (
+        <div key={i} style={{ position: "fixed", width: 40, height: 40, ...Object.fromEntries(s.split(";").map(p => { const [k,v]=p.split(":"); return [k.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()), v]; })) }} />
+      ))}
+
+      <div style={{ maxWidth: 800, margin: "0 auto", position: "relative" }}>
+
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 8 }}>
+            <div style={{ height: 1, width: 60, background: "linear-gradient(to right, transparent, #C9A84C)" }} />
+            <span className="ornament">❧</span>
+            <div style={{ height: 1, width: 60, background: "linear-gradient(to left, transparent, #C9A84C)" }} />
+          </div>
+          <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, letterSpacing: 4, color: "#8B6914", textTransform: "uppercase", marginBottom: 8 }}>Personal Investment Ledger</p>
+          <h1 style={{ fontFamily: "'IM Fell English', serif", fontSize: "clamp(30px, 6vw, 52px)", color: "#2A1A00", lineHeight: 1.1, fontStyle: "italic" }}>Stocks & Shares ISA</h1>
+          <h2 style={{ fontFamily: "'IM Fell English', serif", fontSize: "clamp(16px, 3vw, 24px)", color: "#5C4A1E", fontWeight: 400, marginTop: 4 }}>Compound Growth Calculator</h2>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 10 }}>
+            <div style={{ height: 1, width: 80, background: "#C9A84C" }} />
+            <span className="ornament" style={{ fontSize: 10 }}>✦ ✦ ✦</span>
+            <div style={{ height: 1, width: 80, background: "#C9A84C" }} />
+          </div>
+        </div>
+
+        {/* Sliders */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+          {[
+            { label: "Daily Contribution", value: `£${daily}`, sub: `£${(daily*365).toLocaleString()} per annum`, min: 1, max: 100, val: daily, set: setDaily, color: "#8B6914", unit: "£" },
+            { label: "Investment Horizon", value: `${years} Years`, sub: `Total invested: £${totalContributed.toLocaleString()}`, min: 1, max: 40, val: years, set: setYears, color: "#2D5A3D", unit: "yr" },
+          ].map(({ label, value, sub, min, max, val, set, color }) => (
+            <div key={label} style={{ background: "#FAF6EE", border: "1px solid #D4B87A", padding: "20px 22px", position: "relative" }}>
+              <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4, border: "1px solid #F0E0B0", pointerEvents: "none" }} />
+              <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 3, color: "#A0845C", textTransform: "uppercase", marginBottom: 6 }}>{label}</p>
+              <p style={{ fontFamily: "'IM Fell English', serif", fontSize: 32, color, marginBottom: 12, fontStyle: "italic" }}>{value}</p>
+              <input className="ledger-input" type="range" min={min} max={max} value={val} onChange={e => set(+e.target.value)}
+                style={{ background: `linear-gradient(to right, ${color} ${((val-min)/(max-min))*100}%, #E8D9B0 0%)` }}
+              />
+              <style>{`.ledger-input::-webkit-slider-thumb { background: ${color}; }`}</style>
+              <p style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "#A0845C", fontStyle: "italic", marginTop: 8 }}>{sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Stat cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 24 }}>
+          {RATES.map(({ label, key, color, rate }) => {
+            const val = final?.[key] ?? 0;
+            const gain = val - totalContributed;
+            return (
+              <div key={key} className="stat-box">
+                <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 2, color: "#A0845C", textTransform: "uppercase", marginBottom: 6 }}>{label}</p>
+                <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, color: "#C9A84C", marginBottom: 2 }}>{(rate*100).toFixed(0)}% p.a.</p>
+                <p style={{ fontFamily: "'IM Fell English', serif", fontSize: 28, color, marginBottom: 4, fontStyle: "italic" }}>{formatGBP(val)}</p>
+                <p style={{ fontSize: 13, color: "#6B5230", fontStyle: "italic" }}>Gain of {formatGBP(gain)}</p>
+                <p style={{ fontSize: 12, color: "#A0845C", marginTop: 2 }}>{(val/totalContributed).toFixed(1)}× return</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Chart / Table */}
+        <div style={{ background: "#FAF6EE", border: "1px solid #D4B87A", padding: "22px 20px", position: "relative" }}>
+          <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4, border: "1px solid #F0E0B0", pointerEvents: "none" }} />
+          
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 3, color: "#A0845C", textTransform: "uppercase" }}>
+              Projection — {years} Year{years !== 1 ? "s" : ""}
+            </p>
+            <div style={{ display: "flex" }}>
+              <button className={`tab-pill ${activeTab==="chart"?"active":""}`} onClick={() => setActiveTab("chart")}>Chart</button>
+              <button className={`tab-pill ${activeTab==="table"?"active":""}`} onClick={() => setActiveTab("table")}>Ledger</button>
+            </div>
+          </div>
+
+          {activeTab === "chart" && (
+            <>
+              <div style={{ display: "flex", gap: 20, marginBottom: 14, flexWrap: "wrap" }}>
+                {[...RATES, { label: "Contributed", key: "contributed", color: "#C9A84C" }].map(({ label, color }) => (
+                  <span key={label} style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, color, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ display: "inline-block", width: 20, height: 2, background: color, verticalAlign: "middle" }} />
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="#E8D9B0" />
+                  <XAxis dataKey="year" stroke="#C9A84C" tick={{ fill: "#A0845C", fontSize: 11, fontFamily: "'Courier Prime', monospace" }} />
+                  <YAxis stroke="#C9A84C" tick={{ fill: "#A0845C", fontSize: 10, fontFamily: "'Courier Prime', monospace" }} tickFormatter={formatGBP} width={60} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="contributed" stroke="#C9A84C" strokeDasharray="5 3" dot={false} strokeWidth={1.5} name="Contributed" />
+                  {RATES.map(({ key, label, color }) => (
+                    <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} name={label} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </>
+          )}
+
+          {activeTab === "table" && (
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "center" }}>Year</th>
+                    <th>Invested</th>
+                    {RATES.map(r => <th key={r.key} style={{ color: r.color }}>{r.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.filter((_, i) => i === 0 || (i+1) % Math.max(1, Math.floor(years/10)) === 0 || i === data.length-1)
+                    .map(row => (
+                      <tr key={row.year}>
+                        <td>{row.year}</td>
+                        <td style={{ color: "#8B6914" }}>{formatGBP(row.contributed)}</td>
+                        {RATES.map(({ key, color }) => <td key={key} style={{ color }}>{formatGBP(row[key])}</td>)}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <p style={{ textAlign: "center", fontFamily: "'Crimson Text', serif", fontStyle: "italic", color: "#A0845C", fontSize: 13, marginTop: 20 }}>
+          For illustrative purposes only. Past performance does not guarantee future returns. ✦
+        </p>
+      </div>
+    </div>
+  );
+}
