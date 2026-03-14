@@ -1,215 +1,394 @@
-import { useState, useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+<!DOCTYPE html>
 
-const formatGBP = (val) =>
-  val >= 1_000_000 ? `£${(val / 1_000_000).toFixed(2)}m`
-  : val >= 1_000 ? `£${(val / 1_000).toFixed(1)}k`
-  : `£${val.toFixed(0)}`;
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISA Growth Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&family=Courier+Prime:wght@400;700&display=swap');
 
-const RATES = [
-  { label: "Conservative", key: "conservative", rate: 0.04, color: "#8B6914" },
-  { label: "Moderate", key: "moderate", rate: 0.07, color: "#2D5A3D" },
-  { label: "Optimistic", key: "optimistic", rate: 0.10, color: "#8B2635" },
-];
+- { box-sizing: border-box; margin: 0; padding: 0; }
 
-function computeData(dailyAmount, years) {
-  const yearly = dailyAmount * 365;
-  return Array.from({ length: years }, (_, i) => {
-    const y = i + 1;
-    const row = { year: y, contributed: Math.round(yearly * y) };
-    RATES.forEach(({ key, rate }) => {
-      let bal = 0;
-      for (let j = 0; j < y; j++) bal = (bal + yearly) * (1 + rate);
-      row[key] = Math.round(bal);
-    });
-    return row;
-  });
+body {
+background: #F5EDD8;
+font-family: ‘Crimson Text’, Georgia, serif;
+min-height: 100vh;
+padding: 28px 16px 40px;
+color: #2A1A00;
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background: "#FAF6EE", border: "1px solid #C9A84C", borderRadius: 4, padding: "10px 14px", fontFamily: "'Crimson Text', serif", fontSize: 14, boxShadow: "2px 2px 8px rgba(0,0,0,0.15)" }}>
-      <p style={{ color: "#5C4A1E", fontWeight: 700, marginBottom: 6, borderBottom: "1px solid #E8D9B0", paddingBottom: 4 }}>Year {label}</p>
-      {payload.map(p => <p key={p.dataKey} style={{ color: p.color, margin: "2px 0" }}>{p.name}: <strong>{formatGBP(p.value)}</strong></p>)}
+.container { max-width: 780px; margin: 0 auto; }
+
+/* Header */
+.header { text-align: center; margin-bottom: 28px; }
+.header .eyebrow {
+font-family: ‘Courier Prime’, monospace;
+font-size: 10px; letter-spacing: 4px;
+color: #8B6914; text-transform: uppercase; margin-bottom: 6px;
+}
+.header h1 {
+font-size: clamp(26px, 6vw, 42px);
+font-style: italic; color: #2A1A00; line-height: 1.1;
+}
+.divider {
+height: 1px;
+background: linear-gradient(to right, transparent, #C9A84C, transparent);
+max-width: 280px; margin: 12px auto;
+}
+
+/* Sliders */
+.sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+@media (max-width: 480px) { .sliders { grid-template-columns: 1fr; } }
+
+.card {
+background: #FAF6EE;
+border: 1px solid #D4B87A;
+padding: 18px 20px;
+}
+.card-label {
+font-family: ‘Courier Prime’, monospace;
+font-size: 10px; letter-spacing: 2px;
+color: #A0845C; text-transform: uppercase; margin-bottom: 4px;
+}
+.card-value {
+font-size: 30px; font-style: italic;
+margin-bottom: 10px;
+}
+.card-sub {
+font-size: 12px; color: #A0845C;
+font-style: italic; margin-top: 6px;
+}
+
+input[type=range] {
+width: 100%; height: 4px;
+border-radius: 2px; outline: none;
+cursor: pointer; -webkit-appearance: none;
+appearance: none;
+}
+input[type=range]::-webkit-slider-thumb {
+-webkit-appearance: none; appearance: none;
+width: 20px; height: 20px; border-radius: 50%;
+border: 2px solid #F5EDD8; cursor: pointer;
+}
+#dailySlider { background: #8B6914; }
+#dailySlider::-webkit-slider-thumb { background: #8B6914; }
+#yearsSlider { background: #2D5A3D; }
+#yearsSlider::-webkit-slider-thumb { background: #2D5A3D; }
+
+/* Stat cards */
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr; } }
+
+.stat-card {
+background: #FAF6EE;
+border: 1px solid #D4B87A;
+padding: 14px 16px;
+}
+.stat-label {
+font-family: ‘Courier Prime’, monospace;
+font-size: 10px; letter-spacing: 1px;
+color: #A0845C; text-transform: uppercase; margin-bottom: 2px;
+}
+.stat-rate {
+font-family: ‘Courier Prime’, monospace;
+font-size: 10px; color: #C9A84C; margin-bottom: 4px;
+}
+.stat-value { font-size: 24px; font-style: italic; margin-bottom: 3px; }
+.stat-gain { font-size: 12px; color: #6B5230; font-style: italic; }
+.stat-mult { font-size: 11px; color: #A0845C; margin-top: 2px; }
+
+/* Panel */
+.panel { background: #FAF6EE; border: 1px solid #D4B87A; padding: 20px; }
+.panel-header {
+display: flex; justify-content: space-between;
+align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+}
+.panel-title {
+font-family: ‘Courier Prime’, monospace;
+font-size: 10px; letter-spacing: 3px;
+color: #A0845C; text-transform: uppercase;
+}
+.tabs { display: flex; }
+.tab-btn {
+background: none; border: 1px solid #C9A84C;
+padding: 5px 14px; cursor: pointer;
+font-family: ‘Crimson Text’, serif; font-size: 14px;
+color: #8B6914; transition: all 0.2s;
+}
+.tab-btn:first-child { border-right: none; }
+.tab-btn.active { background: #C9A84C; color: #FAF6EE; }
+
+/* Chart */
+#chartContainer { position: relative; height: 280px; }
+
+/* Legend */
+.legend {
+display: flex; gap: 16px; flex-wrap: wrap;
+margin-bottom: 12px;
+}
+.legend-item {
+display: flex; align-items: center; gap: 6px;
+font-family: ‘Courier Prime’, monospace; font-size: 11px; color: #A0845C;
+}
+.legend-line { width: 20px; height: 2px; }
+
+/* Table */
+#tableContainer { display: none; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: ‘Courier Prime’, monospace; font-size: 13px; }
+th {
+padding: 8px 10px; text-align: right;
+font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+font-weight: 700; border-bottom: 2px solid #C9A84C;
+}
+th:first-child { text-align: center; }
+td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #E8D9B0; }
+td:first-child { text-align: center; color: #8B6914; }
+tr:hover td { background: #F5EDDA; }
+
+.footer {
+text-align: center; font-size: 12px; color: #A0845C;
+font-style: italic; margin-top: 16px;
+}
+
+/* ISA warning */
+.isa-note {
+background: #FFF8E7; border: 1px solid #E8C96A;
+padding: 8px 14px; margin-bottom: 16px;
+font-size: 12px; color: #7A5C14; font-style: italic; text-align: center;
+}
+</style>
+
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <p class="eyebrow">Personal Investment Ledger</p>
+    <h1>ISA Growth Calculator</h1>
+    <div class="divider"></div>
+    <p style="font-size:14px;color:#8B6914;font-style:italic;">Drag the sliders to explore your investment journey</p>
+  </div>
+
+  <div class="isa-note">
+    💷 Annual ISA allowance: £20,000 &nbsp;|&nbsp; Tax-free growth &amp; withdrawals
+  </div>
+
+  <!-- Sliders -->
+
+  <div class="sliders">
+    <div class="card">
+      <p class="card-label">Daily Contribution</p>
+      <p class="card-value" id="dailyDisplay" style="color:#8B6914;">£10</p>
+      <input type="range" id="dailySlider" min="1" max="100" value="10">
+      <p class="card-sub" id="dailySub">£3,650 per year</p>
     </div>
-  );
-};
+    <div class="card">
+      <p class="card-label">Time Horizon</p>
+      <p class="card-value" id="yearsDisplay" style="color:#2D5A3D;">20 years</p>
+      <input type="range" id="yearsSlider" min="1" max="40" value="20">
+      <p class="card-sub" id="yearsSub">Total invested: £73,000</p>
+    </div>
+  </div>
 
-export default function ISACalculator() {
-  const [daily, setDaily] = useState(10);
-  const [years, setYears] = useState(20);
-  const [activeTab, setActiveTab] = useState("chart");
-  const data = useMemo(() => computeData(daily, years), [daily, years]);
-  const final = data[data.length - 1];
-  const totalContributed = daily * 365 * years;
+  <!-- Stats -->
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#F5EDD8", fontFamily: "'Crimson Text', serif", padding: "40px 16px", position: "relative", overflow: "hidden" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=IM+Fell+English:ital@0;1&family=Courier+Prime:wght@400;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        .ledger-input { -webkit-appearance: none; width: 100%; height: 3px; border-radius: 0; outline: none; cursor: pointer; }
-        .ledger-input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid #F5EDD8; transition: transform 0.15s; }
-        .ledger-input::-webkit-slider-thumb:hover { transform: scale(1.2); }
-        
-        .tab-pill { background: none; border: 1px solid #C9A84C; cursor: pointer; padding: 5px 18px; font-family: 'Crimson Text', serif; font-size: 15px; transition: all 0.2s; color: #8B6914; letter-spacing: 0.05em; }
-        .tab-pill:first-child { border-right: none; }
-        .tab-pill.active { background: #C9A84C; color: #FAF6EE; }
-        .tab-pill:not(.active):hover { background: #F0E4C0; }
-        
-        .ornament { color: #C9A84C; font-size: 18px; }
-        
-        .stat-box { background: #FAF6EE; border: 1px solid #D4B87A; padding: 16px 18px; position: relative; }
-        .stat-box::before { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; border: 1px solid #E8D9B0; pointer-events: none; }
-        
-        table { border-collapse: collapse; width: 100%; }
-        th { font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #8B6914; padding: 8px 12px; border-bottom: 2px solid #C9A84C; text-align: right; }
-        th:first-child { text-align: center; }
-        td { padding: 9px 12px; border-bottom: 1px solid #E8D9B0; font-size: 15px; color: #3D2B0A; text-align: right; font-family: 'Courier Prime', monospace; }
-        td:first-child { text-align: center; color: #8B6914; }
-        tr:hover td { background: #F5EDDA; }
-        
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 120px; color: rgba(201,168,76,0.06); font-family: 'IM Fell English', serif; white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: 0.1em; }
-      `}</style>
+  <div class="stats">
+    <div class="stat-card" style="border-top:3px solid #8B6914;">
+      <p class="stat-label">Conservative</p>
+      <p class="stat-rate">4% p.a.</p>
+      <p class="stat-value" id="val-conservative" style="color:#8B6914;">-</p>
+      <p class="stat-gain" id="gain-conservative">-</p>
+      <p class="stat-mult" id="mult-conservative">-</p>
+    </div>
+    <div class="stat-card" style="border-top:3px solid #2D5A3D;">
+      <p class="stat-label">Moderate</p>
+      <p class="stat-rate">7% p.a.</p>
+      <p class="stat-value" id="val-moderate" style="color:#2D5A3D;">-</p>
+      <p class="stat-gain" id="gain-moderate">-</p>
+      <p class="stat-mult" id="mult-moderate">-</p>
+    </div>
+    <div class="stat-card" style="border-top:3px solid #8B2635;">
+      <p class="stat-label">Optimistic</p>
+      <p class="stat-rate">10% p.a.</p>
+      <p class="stat-value" id="val-optimistic" style="color:#8B2635;">-</p>
+      <p class="stat-gain" id="gain-optimistic">-</p>
+      <p class="stat-mult" id="mult-optimistic">-</p>
+    </div>
+  </div>
 
-      {/* Watermark */}
-      <div className="watermark">STOCKS & SHARES ISA</div>
+  <!-- Chart / Table Panel -->
 
-      {/* Decorative corner borders */}
-      {["top:0;left:0;border-top:3px solid #C9A84C;border-left:3px solid #C9A84C",
-        "top:0;right:0;border-top:3px solid #C9A84C;border-right:3px solid #C9A84C",
-        "bottom:0;left:0;border-bottom:3px solid #C9A84C;border-left:3px solid #C9A84C",
-        "bottom:0;right:0;border-bottom:3px solid #C9A84C;border-right:3px solid #C9A84C"
-      ].map((s, i) => (
-        <div key={i} style={{ position: "fixed", width: 40, height: 40, ...Object.fromEntries(s.split(";").map(p => { const [k,v]=p.split(":"); return [k.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()), v]; })) }} />
-      ))}
-
-      <div style={{ maxWidth: 800, margin: "0 auto", position: "relative" }}>
-
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 8 }}>
-            <div style={{ height: 1, width: 60, background: "linear-gradient(to right, transparent, #C9A84C)" }} />
-            <span className="ornament">❧</span>
-            <div style={{ height: 1, width: 60, background: "linear-gradient(to left, transparent, #C9A84C)" }} />
-          </div>
-          <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, letterSpacing: 4, color: "#8B6914", textTransform: "uppercase", marginBottom: 8 }}>Personal Investment Ledger</p>
-          <h1 style={{ fontFamily: "'IM Fell English', serif", fontSize: "clamp(30px, 6vw, 52px)", color: "#2A1A00", lineHeight: 1.1, fontStyle: "italic" }}>Stocks & Shares ISA</h1>
-          <h2 style={{ fontFamily: "'IM Fell English', serif", fontSize: "clamp(16px, 3vw, 24px)", color: "#5C4A1E", fontWeight: 400, marginTop: 4 }}>Compound Growth Calculator</h2>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 10 }}>
-            <div style={{ height: 1, width: 80, background: "#C9A84C" }} />
-            <span className="ornament" style={{ fontSize: 10 }}>✦ ✦ ✦</span>
-            <div style={{ height: 1, width: 80, background: "#C9A84C" }} />
-          </div>
-        </div>
-
-        {/* Sliders */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-          {[
-            { label: "Daily Contribution", value: `£${daily}`, sub: `£${(daily*365).toLocaleString()} per annum`, min: 1, max: 100, val: daily, set: setDaily, color: "#8B6914", unit: "£" },
-            { label: "Investment Horizon", value: `${years} Years`, sub: `Total invested: £${totalContributed.toLocaleString()}`, min: 1, max: 40, val: years, set: setYears, color: "#2D5A3D", unit: "yr" },
-          ].map(({ label, value, sub, min, max, val, set, color }) => (
-            <div key={label} style={{ background: "#FAF6EE", border: "1px solid #D4B87A", padding: "20px 22px", position: "relative" }}>
-              <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4, border: "1px solid #F0E0B0", pointerEvents: "none" }} />
-              <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 3, color: "#A0845C", textTransform: "uppercase", marginBottom: 6 }}>{label}</p>
-              <p style={{ fontFamily: "'IM Fell English', serif", fontSize: 32, color, marginBottom: 12, fontStyle: "italic" }}>{value}</p>
-              <input className="ledger-input" type="range" min={min} max={max} value={val} onChange={e => set(+e.target.value)}
-                style={{ background: `linear-gradient(to right, ${color} ${((val-min)/(max-min))*100}%, #E8D9B0 0%)` }}
-              />
-              <style>{`.ledger-input::-webkit-slider-thumb { background: ${color}; }`}</style>
-              <p style={{ fontFamily: "'Crimson Text', serif", fontSize: 13, color: "#A0845C", fontStyle: "italic", marginTop: 8 }}>{sub}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 24 }}>
-          {RATES.map(({ label, key, color, rate }) => {
-            const val = final?.[key] ?? 0;
-            const gain = val - totalContributed;
-            return (
-              <div key={key} className="stat-box">
-                <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 2, color: "#A0845C", textTransform: "uppercase", marginBottom: 6 }}>{label}</p>
-                <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, color: "#C9A84C", marginBottom: 2 }}>{(rate*100).toFixed(0)}% p.a.</p>
-                <p style={{ fontFamily: "'IM Fell English', serif", fontSize: 28, color, marginBottom: 4, fontStyle: "italic" }}>{formatGBP(val)}</p>
-                <p style={{ fontSize: 13, color: "#6B5230", fontStyle: "italic" }}>Gain of {formatGBP(gain)}</p>
-                <p style={{ fontSize: 12, color: "#A0845C", marginTop: 2 }}>{(val/totalContributed).toFixed(1)}× return</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Chart / Table */}
-        <div style={{ background: "#FAF6EE", border: "1px solid #D4B87A", padding: "22px 20px", position: "relative" }}>
-          <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4, border: "1px solid #F0E0B0", pointerEvents: "none" }} />
-          
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 10, letterSpacing: 3, color: "#A0845C", textTransform: "uppercase" }}>
-              Projection — {years} Year{years !== 1 ? "s" : ""}
-            </p>
-            <div style={{ display: "flex" }}>
-              <button className={`tab-pill ${activeTab==="chart"?"active":""}`} onClick={() => setActiveTab("chart")}>Chart</button>
-              <button className={`tab-pill ${activeTab==="table"?"active":""}`} onClick={() => setActiveTab("table")}>Ledger</button>
-            </div>
-          </div>
-
-          {activeTab === "chart" && (
-            <>
-              <div style={{ display: "flex", gap: 20, marginBottom: 14, flexWrap: "wrap" }}>
-                {[...RATES, { label: "Contributed", key: "contributed", color: "#C9A84C" }].map(({ label, color }) => (
-                  <span key={label} style={{ fontFamily: "'Courier Prime', monospace", fontSize: 11, color, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ display: "inline-block", width: 20, height: 2, background: color, verticalAlign: "middle" }} />
-                    {label}
-                  </span>
-                ))}
-              </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="#E8D9B0" />
-                  <XAxis dataKey="year" stroke="#C9A84C" tick={{ fill: "#A0845C", fontSize: 11, fontFamily: "'Courier Prime', monospace" }} />
-                  <YAxis stroke="#C9A84C" tick={{ fill: "#A0845C", fontSize: 10, fontFamily: "'Courier Prime', monospace" }} tickFormatter={formatGBP} width={60} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="contributed" stroke="#C9A84C" strokeDasharray="5 3" dot={false} strokeWidth={1.5} name="Contributed" />
-                  {RATES.map(({ key, label, color }) => (
-                    <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} name={label} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </>
-          )}
-
-          {activeTab === "table" && (
-            <div style={{ overflowX: "auto" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: "center" }}>Year</th>
-                    <th>Invested</th>
-                    {RATES.map(r => <th key={r.key} style={{ color: r.color }}>{r.label}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.filter((_, i) => i === 0 || (i+1) % Math.max(1, Math.floor(years/10)) === 0 || i === data.length-1)
-                    .map(row => (
-                      <tr key={row.year}>
-                        <td>{row.year}</td>
-                        <td style={{ color: "#8B6914" }}>{formatGBP(row.contributed)}</td>
-                        {RATES.map(({ key, color }) => <td key={key} style={{ color }}>{formatGBP(row[key])}</td>)}
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <p style={{ textAlign: "center", fontFamily: "'Crimson Text', serif", fontStyle: "italic", color: "#A0845C", fontSize: 13, marginTop: 20 }}>
-          For illustrative purposes only. Past performance does not guarantee future returns. ✦
-        </p>
+  <div class="panel">
+    <div class="panel-header">
+      <p class="panel-title" id="panelTitle">20-Year Projection</p>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('chart')">Chart</button>
+        <button class="tab-btn" onclick="switchTab('table')">Ledger</button>
       </div>
     </div>
-  );
-}
+
+```
+<div id="chartContainer">
+  <div class="legend">
+    <span class="legend-item"><span class="legend-line" style="background:#C9A84C;border-top:2px dashed #C9A84C;height:0;"></span>Contributed</span>
+    <span class="legend-item"><span class="legend-line" style="background:#8B6914;"></span>Conservative</span>
+    <span class="legend-item"><span class="legend-line" style="background:#2D5A3D;"></span>Moderate</span>
+    <span class="legend-item"><span class="legend-line" style="background:#8B2635;"></span>Optimistic</span>
+  </div>
+  <canvas id="myChart"></canvas>
+</div>
+
+<div id="tableContainer">
+  <table>
+    <thead>
+      <tr>
+        <th style="color:#8B6914;">Year</th>
+        <th style="color:#8B6914;">Invested</th>
+        <th style="color:#8B6914;">Conservative</th>
+        <th style="color:#2D5A3D;">Moderate</th>
+        <th style="color:#8B2635;">Optimistic</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+```
+
+  </div>
+
+  <p class="footer">For illustrative purposes only. Past performance does not guarantee future returns. ✦</p>
+</div>
+
+<script>
+  const RATES = [
+    { key: 'conservative', rate: 0.04, color: '#8B6914' },
+    { key: 'moderate',     rate: 0.07, color: '#2D5A3D' },
+    { key: 'optimistic',   rate: 0.10, color: '#8B2635' },
+  ];
+
+  function fmt(val) {
+    if (val >= 1_000_000) return '£' + (val / 1_000_000).toFixed(2) + 'm';
+    if (val >= 1_000)     return '£' + (val / 1_000).toFixed(1) + 'k';
+    return '£' + Math.round(val).toLocaleString();
+  }
+
+  function computeData(daily, years) {
+    const yearly = daily * 365;
+    return Array.from({ length: years }, (_, i) => {
+      const y = i + 1;
+      const row = { year: y, contributed: Math.round(yearly * y) };
+      RATES.forEach(({ key, rate }) => {
+        let bal = 0;
+        for (let j = 0; j < y; j++) bal = (bal + yearly) * (1 + rate);
+        row[key] = Math.round(bal);
+      });
+      return row;
+    });
+  }
+
+  // Chart setup
+  const ctx = document.getElementById('myChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Contributed', data: [], borderColor: '#C9A84C', borderDash: [5,3], borderWidth: 1.5, pointRadius: 0, fill: false },
+      { label: 'Conservative', data: [], borderColor: '#8B6914', borderWidth: 2, pointRadius: 0, fill: false },
+      { label: 'Moderate',     data: [], borderColor: '#2D5A3D', borderWidth: 2, pointRadius: 0, fill: false },
+      { label: 'Optimistic',   data: [], borderColor: '#8B2635', borderWidth: 2, pointRadius: 0, fill: false },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#FAF6EE',
+          titleColor: '#5C4A1E', bodyColor: '#3D2B0A',
+          borderColor: '#C9A84C', borderWidth: 1,
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#E8D9B0' },
+          ticks: { color: '#A0845C', font: { family: 'Courier Prime, monospace', size: 11 } },
+          title: { display: true, text: 'Years', color: '#A0845C', font: { size: 11 } }
+        },
+        y: {
+          grid: { color: '#E8D9B0' },
+          ticks: {
+            color: '#A0845C', font: { family: 'Courier Prime, monospace', size: 10 },
+            callback: v => fmt(v)
+          }
+        }
+      }
+    }
+  });
+
+  function updateAll() {
+    const daily = +document.getElementById('dailySlider').value;
+    const years = +document.getElementById('yearsSlider').value;
+    const yearly = daily * 365;
+    const total = yearly * years;
+    const data = computeData(daily, years);
+    const final = data[data.length - 1];
+
+    // Slider displays
+    document.getElementById('dailyDisplay').textContent = `£${daily}`;
+    document.getElementById('dailySub').textContent = `£${yearly.toLocaleString()} per year`;
+    document.getElementById('yearsDisplay').textContent = `${years} year${years !== 1 ? 's' : ''}`;
+    document.getElementById('yearsSub').textContent = `Total invested: £${total.toLocaleString()}`;
+    document.getElementById('panelTitle').textContent = `${years}-Year Projection`;
+
+    // Stat cards
+    RATES.forEach(({ key }) => {
+      const val = final[key];
+      const gain = val - total;
+      const mult = (val / total).toFixed(1);
+      document.getElementById(`val-${key}`).textContent = fmt(val);
+      document.getElementById(`gain-${key}`).textContent = `+${fmt(gain)} gain`;
+      document.getElementById(`mult-${key}`).textContent = `${mult}× your money`;
+    });
+
+    // Chart
+    chart.data.labels = data.map(d => d.year);
+    chart.data.datasets[0].data = data.map(d => d.contributed);
+    chart.data.datasets[1].data = data.map(d => d.conservative);
+    chart.data.datasets[2].data = data.map(d => d.moderate);
+    chart.data.datasets[3].data = data.map(d => d.optimistic);
+    chart.update();
+
+    // Table
+    const step = Math.max(1, Math.floor(years / 8));
+    const rows = data.filter((_, i) => i === 0 || (i + 1) % step === 0 || i === data.length - 1);
+    document.getElementById('tableBody').innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.year}</td>
+        <td style="color:#A0845C">${fmt(r.contributed)}</td>
+        <td style="color:#8B6914">${fmt(r.conservative)}</td>
+        <td style="color:#2D5A3D">${fmt(r.moderate)}</td>
+        <td style="color:#8B2635">${fmt(r.optimistic)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      b.classList.toggle('active', (i === 0) === (tab === 'chart'));
+    });
+    document.getElementById('chartContainer').style.display = tab === 'chart' ? 'block' : 'none';
+    document.getElementById('tableContainer').style.display = tab === 'table' ? 'block' : 'none';
+  }
+
+  document.getElementById('dailySlider').addEventListener('input', updateAll);
+  document.getElementById('yearsSlider').addEventListener('input', updateAll);
+
+  updateAll();
+</script>
+
+</body>
+</html>
